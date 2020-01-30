@@ -3,9 +3,11 @@
 #include "opencv2/core/core.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/highgui.hpp"
+#include <opencv2/cudaimgproc.hpp>
 #include <camera_model/camera_models/CameraFactory.h>
 #include "cv_bridge/cv_bridge.h"
 #include <experimental/filesystem>
+#include <opencv2/cudawarping.hpp>
 
 std::vector<cv::Mat> generateAllUndistMap(camera_model::CameraPtr p_cam,
                                           Eigen::Vector3d rotation,
@@ -15,7 +17,7 @@ std::vector<cv::Mat> generateAllUndistMap(camera_model::CameraPtr p_cam,
 
 cv::Mat genOneUndistMap(
     camera_model::CameraPtr p_cam,
-    Eigen::AngleAxis<double> rotation,
+    Eigen::Quaterniond rotation,
     const unsigned &imgWidth,
     const unsigned &imgHeight,
     const double &f);

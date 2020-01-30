@@ -2,7 +2,7 @@
     <node pkg="fisheye_flattener" type="fisheye_flattener_node" name="flattener" output="screen">
         <!-- <param name="cam_file" type ="string" value="$(find fisheye_flattener)/config/CM3_fish_camera_calib.yaml"/> -->
         <param name="cam_file" type ="string" value="/home/xuhao/bags/ptgrey_17591762_camera_calib.yaml"/>
-        <param name="inputTopic" type ="string" value="/stereo/up/image_raw"/>
+        <param name="inputTopic" type ="string" value="/stereo/left/image_raw"/>
         <param name="outputTopicPrefix" type="string" value="flatImage"/>
         <!-- rotationVector: addition rotational offset for remapping  -->
         <param name="rotationVectorX" type="double" value="0"/> 
@@ -18,7 +18,7 @@
     <node pkg="fisheye_flattener" type="fisheye_flattener_node" name="flattener_2" output="screen">
         <!-- <param name="cam_file" type ="string" value="$(find fisheye_flattener)/config/CM3_fish_camera_calib.yaml"/> -->
         <param name="cam_file" type ="string" value="/home/xuhao/bags/ptgrey_17591763_camera_calib.yaml"/>
-        <param name="inputTopic" type ="string" value="/stereo/down/image_raw"/>
+        <param name="inputTopic" type ="string" value="/stereo/right/image_raw"/>
         <param name="outputTopicPrefix" type="string" value="flatImage"/>
         <!-- rotationVector: addition rotational offset for remapping  -->
         <param name="rotationVectorX" type="double" value="180"/> 

@@ -2,6 +2,15 @@
 #include <pluginlib/class_list_macros.h>
 #include <omp.h>
 
+#ifdef USE_BACKWARD
+#define BACKWARD_HAS_DW 1
+#include <backward.hpp>
+namespace backward
+{
+    backward::SignalHandling sh;
+}
+#endif
+
 #define DEG_TO_RAD (M_PI / 180.0)
 
 namespace fisheye_flattener_pkg
@@ -103,7 +112,7 @@ std::vector<cv::Mat> FisheyeFlattener::generateAllUndistMap(
     const double &fov //degree
 )
 {
-    ROS_INFO("Generating undistortion maps:");
+    NODELET_INFO("Generating undistortion maps:");
     double sideVerticalFOV = (fov - 180) * DEG_TO_RAD;
     if (sideVerticalFOV < 0)
         sideVerticalFOV = 0;
@@ -112,10 +121,10 @@ std::vector<cv::Mat> FisheyeFlattener::generateAllUndistMap(
     double f_center = (double)imgWidth / 2 / tan(centerFOV / 2);
     double f_side = (double)imgWidth / 2;
 
-    ROS_INFO("Center FOV: %f_center", centerFOV);
+    NODELET_INFO("Center FOV: %f_center", centerFOV);
     // int sideImgHeight = sideVerticalFOV / centerFOV * imgWidth;
     int sideImgHeight = 2 * f_side * tan(sideVerticalFOV/2);
-    ROS_INFO("Side image height: %d", sideImgHeight);
+    NODELET_INFO("Side image height: %d", sideImgHeight);
     std::vector<cv::Mat> maps(5, cv::Mat());
 
     // test points
@@ -129,11 +138,12 @@ std::vector<cv::Mat> FisheyeFlattener::generateAllUndistMap(
     {
         Eigen::Vector2d temp;
         p_cam->spaceToPlane(testPoints[i], temp);
-        ROS_INFO("Test point %d : (%.2f,%.2f,%.2f) projected to (%.2f,%.2f)", i,
+        NODELET_INFO("Test point %d : (%.2f,%.2f,%.2f) projected to (%.2f,%.2f)", i,
                  testPoints[i][0], testPoints[i][1], testPoints[i][2],
                  temp[0], temp[1]);
     }
 
+    return maps;
     // center pinhole camera orientation
     std::vector<Eigen::Quaterniond> outputDir;
     outputDir.reserve(5);
@@ -145,10 +155,10 @@ std::vector<cv::Mat> FisheyeFlattener::generateAllUndistMap(
         outputDir[i] = outputDir[i - 1] * Eigen::AngleAxis<double>(M_PI / 2, Eigen::Vector3d(0, 1, 0));
     }
     // calculate focal length of fake pinhole cameras (pixel size = 1 unit)
-    ROS_INFO("Pinhole cameras focal length: %f_center", f_center);
+    NODELET_INFO("Pinhole cameras focal length: %f_center", f_center);
 
     const int numOutput = (sideImgHeight > 0) ? 5 : 1;
-#pragma omp parallel for
+// #pragma omp parallel for
     for (unsigned i = 0; i < numOutput; i++)
     {
         maps[i] = genOneUndistMap(p_cam, outputDir[i],
@@ -177,8 +187,8 @@ cv::Mat FisheyeFlattener::genOneUndistMap(
     const double &f_center)
 {
     cv::Mat map = cv::Mat(imgHeight, imgWidth, CV_32FC2);
-    ROS_INFO("Generating map of size (%d,%d)", map.size[0], map.size[1]);
-    ROS_INFO("Perspective facing (%.2f,%.2f,%.2f)",
+    NODELET_INFO("Generating map of size (%d,%d)", map.size[0], map.size[1]);
+    NODELET_INFO("Perspective facing (%.2f,%.2f,%.2f)",
              (rotation * Eigen::Vector3d(0, 0, 1))[0],
              (rotation * Eigen::Vector3d(0, 0, 1))[1],
              (rotation * Eigen::Vector3d(0, 0, 1))[2]);
@@ -196,7 +206,7 @@ cv::Mat FisheyeFlattener::genOneUndistMap(
             map.at<cv::Vec2f>(cv::Point(x, y)) = cv::Vec2f(imgPoint.x(), imgPoint.y());
         }
 
-    ROS_INFO("Upper corners: (%.2f, %.2f), (%.2f, %.2f)",
+    NODELET_INFO("Upper corners: (%.2f, %.2f), (%.2f, %.2f)",
              map.at<cv::Vec2f>(cv::Point(0, 0))[0],
              map.at<cv::Vec2f>(cv::Point(0, 0))[1],
              map.at<cv::Vec2f>(cv::Point(imgWidth - 1, 0))[0],

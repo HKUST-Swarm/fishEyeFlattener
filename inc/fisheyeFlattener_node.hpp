@@ -8,16 +8,48 @@
 #include "cv_bridge/cv_bridge.h"
 #include <experimental/filesystem>
 #include <opencv2/cudawarping.hpp>
+#include <nodelet/nodelet.h>
+#include <pluginlib/class_list_macros.h>
 
-std::vector<cv::Mat> generateAllUndistMap(camera_model::CameraPtr p_cam,
-                                          Eigen::Vector3d rotation,
-                                          const unsigned &imgWidth,
-                                          const double &fov //degree
-);
+namespace fisheye_flattener_pkg
+{
+class FisheyeFlattener : public nodelet::Nodelet
+{
+public:
+    FisheyeFlattener() {}
 
-cv::Mat genOneUndistMap(
-    camera_model::CameraPtr p_cam,
-    Eigen::Quaterniond rotation,
-    const unsigned &imgWidth,
-    const unsigned &imgHeight,
-    const double &f);
+private:
+    std::string inputTopic;
+    std::string outputTopicPrefix;
+    std::string camFilePath;
+    camera_model::CameraPtr cam;
+    Eigen::Vector3d cameraRotation;
+    int imgWidth = 0;
+    double fov = 0; //in degree
+    std::vector<cv::Mat> undistMaps;
+    std::vector<cv::cuda::GpuMat> undistMapsGPUX;
+    std::vector<cv::cuda::GpuMat> undistMapsGPUY;
+    std::vector<ros::Publisher> img_pub;
+    bool enable_cuda = false;
+
+
+    virtual void onInit();
+
+    std::vector<cv::Mat> generateAllUndistMap(
+        camera_model::CameraPtr p_cam,
+        Eigen::Vector3d rotation,
+        const unsigned &imgWidth,
+        const double &fov //degree
+    );
+
+    cv::Mat genOneUndistMap(
+        camera_model::CameraPtr p_cam,
+        Eigen::Quaterniond rotation,
+        const unsigned &imgWidth,
+        const unsigned &imgHeight,
+        const double &f);
+
+    void imgCB(const sensor_msgs::Image::ConstPtr &msg);
+};
+
+} // namespace FisheyeFlattener

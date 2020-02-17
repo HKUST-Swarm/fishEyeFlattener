@@ -1,34 +1,37 @@
 <launch>
-    <node pkg="fisheye_flattener" type="fisheye_flattener_node" name="flattener" output="screen">
-        <!-- <param name="cam_file" type ="string" value="$(find fisheye_flattener)/config/CM3_fish_camera_calib.yaml"/> -->
-        <param name="cam_file" type ="string" value="/home/xuhao/bags/ptgrey_17591762_camera_calib.yaml"/>
-        <param name="inputTopic" type ="string" value="/stereo/left/image_raw"/>
-        <param name="outputTopicPrefix" type="string" value="flatImage"/>
-        <!-- rotationVector: addition rotational offset for remapping  -->
-        <param name="rotationVectorX" type="double" value="0"/> 
-        <param name="rotationVectorY" type="double" value="0"/> 
-        <param name="rotationVectorZ" type="double" value="0"/> 
-        <!-- FOV is in degree -->
-        <param name="fov" type="double" value="235"/> 
-        <!-- Image width for center reprojection -->
-        <param name="imgWidth" type="int" value="600"/> 
-        <param name="use_gpu" type="bool" value="true" />
-    </node>
+  <arg name="manager"     default="manager"/>
+  <node pkg="nodelet" type="nodelet" name="$(arg manager)" args="manager" output="screen" />
+  <node pkg="nodelet" type="nodelet" name="left" args="load fisheye_flattener_pkg::FisheyeFlattener /$(arg manager)" output="screen">
+    <param name="cam_file" type ="string" value="$(find fisheye_flattener)/config/ptgrey_17591762_camera_calib.yaml"/>
+    <param name="inputTopic" type ="string" value="/stereo/left/image_raw"/>
+    <param name="outputTopicPrefix" type="string" value="/stereo/flat_left"/>
+    <!-- rotationVector: addition rotational offset for remapping  -->
+    <param name="rotationVectorX" type="double" value="0"/> 
+    <param name="rotationVectorY" type="double" value="0"/> 
+    <param name="rotationVectorZ" type="double" value="0"/> 
+    <!-- FOV is in degree -->
+    <param name="fov" type="double" value="235"/> 
+    <!-- Image width for center reprojection -->
+    <param name="imgWidth" type="int" value="600"/> 
+    <param name="use_gpu" type="bool" value="true" />
+  </node>
 
-    <node pkg="fisheye_flattener" type="fisheye_flattener_node" name="flattener_2" output="screen">
-        <!-- <param name="cam_file" type ="string" value="$(find fisheye_flattener)/config/CM3_fish_camera_calib.yaml"/> -->
-        <param name="cam_file" type ="string" value="/home/xuhao/bags/ptgrey_17591763_camera_calib.yaml"/>
-        <param name="inputTopic" type ="string" value="/stereo/right/image_raw"/>
-        <param name="outputTopicPrefix" type="string" value="flatImage"/>
-        <!-- rotationVector: addition rotational offset for remapping  -->
-        <param name="rotationVectorX" type="double" value="180"/> 
-        <param name="rotationVectorY" type="double" value="0"/> 
-        <param name="rotationVectorZ" type="double" value="0"/> 
-        <!-- FOV is in degree -->
-        <param name="fov" type="double" value="235"/> 
-        <!-- Image width for center reprojection -->
-        <param name="imgWidth" type="int" value="600"/> 
-        <param name="use_gpu" type="bool" value="true" />
-    </node>
+ <node pkg="nodelet" type="nodelet" name="right" args="load fisheye_flattener_pkg::FisheyeFlattener /$(arg manager)" output="screen">
+    <param name="cam_file" type ="string" value="$(find fisheye_flattener)/config/ptgrey_17591763_camera_calib.yaml"/>
+    <param name="inputTopic" type ="string" value="/stereo/right/image_raw"/>
+    <param name="outputTopicPrefix" type="string" value="/stereo/flat_right"/>
+    <!-- rotationVector: addition rotational offset for remapping  -->
+    <param name="rotationVectorX" type="double" value="0"/> 
+    <param name="rotationVectorY" type="double" value="0"/> 
+    <param name="rotationVectorZ" type="double" value="0"/> 
+    <!-- FOV is in degree -->
+    <param name="fov" type="double" value="235"/> 
+    <!-- Image width for center reprojection -->
+    <param name="imgWidth" type="int" value="600"/> 
+    <param name="use_gpu" type="bool" value="true" />
+  </node>
+
+
+
 </launch>
 

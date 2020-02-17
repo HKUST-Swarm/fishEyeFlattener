@@ -1,45 +1,28 @@
 #include "fisheyeFlattener_node.hpp"
+#include <pluginlib/class_list_macros.h>
+#include <omp.h>
 
 #define DEG_TO_RAD (M_PI / 180.0)
 
-namespace globalVar
+namespace fisheye_flattener_pkg
 {
-std::string inputTopic;
-std::string outputTopicPrefix;
-std::string camFilePath;
-camera_model::CameraPtr cam;
-Eigen::Vector3d cameraRotation;
-int imgWidth = 0;
-double fov = 0; //in degree
-std::vector<cv::Mat> undistMaps;
-std::vector<cv::cuda::GpuMat> undistMapsGPUX;
-std::vector<cv::cuda::GpuMat> undistMapsGPUY;
-std::vector<ros::Publisher> img_pub;
-bool enable_cuda = false;
-} // namespace globalVar
-
-void imgCB(const sensor_msgs::Image::ConstPtr &msg);
-
-int main(int argc, char **argv)
+void FisheyeFlattener::onInit()
 {
-    using namespace globalVar;
-
-    ros::init(argc, argv, "fisheyeFlattener_node");
-    ros::NodeHandle nh("~");
+    ros::NodeHandle nh = this->getPrivateNodeHandle();
 
     // obtain camera intrinsics
     nh.param<std::string>("cam_file", camFilePath, "cam.yaml");
-    ROS_INFO(camFilePath.c_str());
+    NODELET_INFO("Camere file: %s", camFilePath.c_str());
     if (!std::experimental::filesystem::exists(camFilePath))
     {
         ROS_ERROR("Camera file does not exist.");
-        return 1;
+        return;
     }
     cam = camera_model::CameraFactory::instance()
               ->generateCameraFromYamlFile(camFilePath);
 
     // remapping parameters
-    nh.param<bool>("use_gpu", globalVar::enable_cuda, false);
+    nh.param<bool>("use_gpu", enable_cuda, false);
     nh.param<double>("rotationVectorX", cameraRotation.x(), 0);
     nh.param<double>("rotationVectorY", cameraRotation.y(), 0);
     nh.param<double>("rotationVectorZ", cameraRotation.z(), 0);
@@ -47,20 +30,20 @@ int main(int argc, char **argv)
     nh.param<int>("imgWidth", imgWidth, 500);
     if (imgWidth <= 0)
     {
-        ROS_ERROR("Resolution must be non-negative");
-        return 1;
+        NODELET_ERROR("Resolution must be non-negative");
+        return;
     }
     if (fov < 0)
     {
-        ROS_ERROR("FOV must be non-negative");
-        return 1;
+        NODELET_ERROR("FOV must be non-negative");
+        return;
     }
 
     nh.param<std::string>("inputTopic", inputTopic, "img");
     nh.param<std::string>("outputTopicPrefix", outputTopicPrefix, "flatImg");
 
     undistMaps = generateAllUndistMap(cam, cameraRotation, imgWidth, fov);
-    if (globalVar::enable_cuda) {
+    if (enable_cuda) {
         for (auto mat : undistMaps) {
             cv::Mat xy[2];
             cv::split(mat, xy);
@@ -70,23 +53,24 @@ int main(int argc, char **argv)
     }
 
 
+    NODELET_INFO("Unsidtortion maps generated.");
     for (int i = 0; i < undistMaps.size(); i++)
     {
         img_pub.push_back(nh.advertise<sensor_msgs::Image>(outputTopicPrefix + "_" + std::to_string(i), 3));
     }
-    ros::Subscriber img_sub = nh.subscribe(inputTopic, 3, imgCB);
+    ros::Subscriber img_sub = nh.subscribe(inputTopic, 3, &FisheyeFlattener::imgCB, this);
     ros::spin();
-    return 0;
+    return;
 }
 
-void imgCB(const sensor_msgs::Image::ConstPtr &msg)
+void FisheyeFlattener::imgCB(const sensor_msgs::Image::ConstPtr &msg)
 {
     cv_bridge::CvImagePtr cv_ptr;
     cv::cuda::GpuMat img_cuda;
     try
     {
         cv_ptr = cv_bridge::toCvCopy(msg);
-        if (globalVar::enable_cuda) {
+        if (enable_cuda) {
             img_cuda.upload(cv_ptr->image);
         }
     }
@@ -95,24 +79,24 @@ void imgCB(const sensor_msgs::Image::ConstPtr &msg)
         ROS_ERROR("cv_bridge exception: %s", e.what());
         return;
     }
-    for (int i = 0; i < globalVar::undistMaps.size(); i++)
+    for (int i = 0; i < undistMaps.size(); i++)
     {
         cv_bridge::CvImage outImg;
         outImg.header = msg->header;
         outImg.encoding = msg->encoding;
-        if (globalVar::enable_cuda) {
+        if (enable_cuda) {
             cv::cuda::GpuMat output;
-            cv::cuda::remap(img_cuda, output, globalVar::undistMapsGPUX[i], globalVar::undistMapsGPUY[i], cv::INTER_LINEAR);
+            cv::cuda::remap(img_cuda, output, undistMapsGPUX[i], undistMapsGPUY[i], cv::INTER_LINEAR);
             output.download(outImg.image);
         } else {
-            cv::remap(cv_ptr->image, outImg.image, globalVar::undistMaps[i], cv::Mat(), cv::INTER_LINEAR);
+            cv::remap(cv_ptr->image, outImg.image, undistMaps[i], cv::Mat(), cv::INTER_LINEAR);
         }
 
-        globalVar::img_pub[i].publish(outImg);
+        img_pub[i].publish(outImg);
     }
 };
 
-std::vector<cv::Mat> generateAllUndistMap(
+std::vector<cv::Mat> FisheyeFlattener::generateAllUndistMap(
     camera_model::CameraPtr p_cam,
     Eigen::Vector3d rotation,
     const unsigned &imgWidth,
@@ -132,8 +116,7 @@ std::vector<cv::Mat> generateAllUndistMap(
     // int sideImgHeight = sideVerticalFOV / centerFOV * imgWidth;
     int sideImgHeight = 2 * f_side * tan(sideVerticalFOV/2);
     ROS_INFO("Side image height: %d", sideImgHeight);
-    std::vector<cv::Mat> maps;
-    maps.reserve(5);
+    std::vector<cv::Mat> maps(5, cv::Mat());
 
     // test points
     Eigen::Vector3d testPoints[] = {
@@ -152,29 +135,26 @@ std::vector<cv::Mat> generateAllUndistMap(
     }
 
     // center pinhole camera orientation
-    // auto t = Eigen::AngleAxis<double>(rotation.norm(), rotation.normalized()).inverse();
-    auto t = Eigen::AngleAxisd(rotation.z() / 180 * M_PI, Eigen::Vector3d::UnitZ()) * 
-        Eigen::AngleAxisd(rotation.y() / 180 * M_PI, Eigen::Vector3d::UnitY()) *
-         Eigen::AngleAxisd(rotation.x() / 180 * M_PI, Eigen::Vector3d::UnitX());
-    // .inverse();
+    std::vector<Eigen::Quaterniond> outputDir;
+    outputDir.reserve(5);
+    outputDir[0] = Eigen::AngleAxis<double>(rotation.norm(), rotation.normalized()).inverse();
+    //turn to y
+    outputDir[1] = outputDir[0] * Eigen::AngleAxis<double>(-M_PI / 2, Eigen::Vector3d(1, 0, 0));
+    for (unsigned i = 2; i < 5; i++)
+    { //turn right
+        outputDir[i] = outputDir[i - 1] * Eigen::AngleAxis<double>(M_PI / 2, Eigen::Vector3d(0, 1, 0));
+    }
+    // calculate focal length of fake pinhole cameras (pixel size = 1 unit)
+    ROS_INFO("Pinhole cameras focal length: %f_center", f_center);
 
-
-    ROS_INFO("Pinhole cameras focal length: center %f side %f", f_center, f_side);
-    maps.push_back(genOneUndistMap(p_cam, t, imgWidth, imgWidth, f_center));
-
-    if (sideImgHeight > 0)
+    const int numOutput = (sideImgHeight > 0) ? 5 : 1;
+#pragma omp parallel for
+    for (unsigned i = 0; i < numOutput; i++)
     {
-        //facing y
-        t = t * Eigen::AngleAxis<double>(-M_PI / 2, Eigen::Vector3d(1, 0, 0));
-        maps.push_back(genOneUndistMap(p_cam, t, imgWidth, sideImgHeight, f_side));
-
-        //turn right/left?
-        t = t * Eigen::AngleAxis<double>(M_PI / 2, Eigen::Vector3d(0, 1, 0));
-        maps.push_back(genOneUndistMap(p_cam, t, imgWidth, sideImgHeight, f_side));
-        t = t * Eigen::AngleAxis<double>(M_PI / 2, Eigen::Vector3d(0, 1, 0));
-        maps.push_back(genOneUndistMap(p_cam, t, imgWidth, sideImgHeight, f_side));
-        t = t * Eigen::AngleAxis<double>(M_PI / 2, Eigen::Vector3d(0, 1, 0));
-        maps.push_back(genOneUndistMap(p_cam, t, imgWidth, sideImgHeight, f_side));
+        maps[i] = genOneUndistMap(p_cam, outputDir[i],
+                                  imgWidth,
+                                  (i == 0) ? imgWidth : sideImgHeight,
+                                  (i == 0) ? f_center : f_side);
     }
     return maps;
 }
@@ -189,7 +169,7 @@ std::vector<cv::Mat> generateAllUndistMap(
  * @param f_center focal length in pin hole camera camera_mode (pixels are 1 unit sized)
  * @return CV_32FC2 mapping matrix 
  */
-cv::Mat genOneUndistMap(
+cv::Mat FisheyeFlattener::genOneUndistMap(
     camera_model::CameraPtr p_cam,
     Eigen::Quaterniond rotation,
     const unsigned &imgWidth,
@@ -222,21 +202,24 @@ cv::Mat genOneUndistMap(
              map.at<cv::Vec2f>(cv::Point(imgWidth - 1, 0))[0],
              map.at<cv::Vec2f>(cv::Point(imgWidth - 1, 0))[1]);
 
-    Eigen::Vector3d objPoint =
-        rotation *
-        Eigen::Vector3d(
-            ((double)0 - (double)imgWidth / 2),
-            ((double)0 - (double)imgHeight / 2),
-            f_center);
-    std::cout << objPoint << std::endl;
+    // Eigen::Vector3d objPoint =
+    //     rotation *
+    //     Eigen::Vector3d(
+    //         ((double)0 - (double)imgWidth / 2),
+    //         ((double)0 - (double)imgHeight / 2),
+    //         f_center);
+    // std::cout << objPoint << std::endl;
 
-    objPoint =
-        rotation *
-        Eigen::Vector3d(
-            ((double)imgWidth / 2),
-            ((double)0 - (double)imgHeight / 2),
-            f_center);
-    std::cout << objPoint << std::endl;
+    // objPoint =
+    //     rotation *
+    //     Eigen::Vector3d(
+    //         ((double)imgWidth / 2),
+    //         ((double)0 - (double)imgHeight / 2),
+    //         f_center);
+    // std::cout << objPoint << std::endl;
 
     return map;
 }
+
+PLUGINLIB_EXPORT_CLASS(fisheye_flattener_pkg::FisheyeFlattener, nodelet::Nodelet);
+} // namespace FisheyeFlattener

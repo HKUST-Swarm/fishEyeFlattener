@@ -124,8 +124,13 @@ std::vector<cv::Mat> generateAllUndistMap(
     if (sideVerticalFOV < 0)
         sideVerticalFOV = 0;
     double centerFOV = fov * DEG_TO_RAD - sideVerticalFOV * 2;
+    // calculate focal length of fake pinhole cameras (pixel size = 1 unit)
+    double f_center = (double)imgWidth / 2 / tan(centerFOV / 2);
+    double f_side = (double)imgWidth / 2;
+
     ROS_INFO("Center FOV: %f_center", centerFOV);
-    int sideImgHeight = sideVerticalFOV / centerFOV * imgWidth;
+    // int sideImgHeight = sideVerticalFOV / centerFOV * imgWidth;
+    int sideImgHeight = 2 * f_side * tan(sideVerticalFOV/2);
     ROS_INFO("Side image height: %d", sideImgHeight);
     std::vector<cv::Mat> maps;
     maps.reserve(5);
@@ -153,9 +158,7 @@ std::vector<cv::Mat> generateAllUndistMap(
          Eigen::AngleAxisd(rotation.x() / 180 * M_PI, Eigen::Vector3d::UnitX());
     // .inverse();
 
-    // calculate focal length of fake pinhole cameras (pixel size = 1 unit)
-    double f_center = (double)imgWidth / 2 / tan(centerFOV / 2);
-    double f_side = (double)imgWidth / 2;
+
     ROS_INFO("Pinhole cameras focal length: center %f side %f", f_center, f_side);
     maps.push_back(genOneUndistMap(p_cam, t, imgWidth, imgWidth, f_center));
 

@@ -134,6 +134,7 @@ std::vector<cv::Mat> FisheyeFlattener::generateAllUndistMap(
         Eigen::Vector3d(0, 1, 1),
         Eigen::Vector3d(1, 1, 1),
     };
+    
     for (int i = 0; i < sizeof(testPoints) / sizeof(Eigen::Vector3d); i++)
     {
         Eigen::Vector2d temp;
@@ -143,8 +144,6 @@ std::vector<cv::Mat> FisheyeFlattener::generateAllUndistMap(
                  temp[0], temp[1]);
     }
 
-    return maps;
-    // center pinhole camera orientation
     std::vector<Eigen::Quaterniond> outputDir;
     outputDir.reserve(5);
     outputDir[0] = Eigen::AngleAxis<double>(rotation.norm(), rotation.normalized()).inverse();
